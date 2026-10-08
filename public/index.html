@@ -77,7 +77,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .brand-mini{display:flex;align-items:center;gap:10px}
 .brand-mark{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--gold);color:var(--gold-l);font-family:var(--serif);font-size:19px;font-weight:700}
 
-/* НОВОЕ: таймер в топбаре — виден всем */
 .topbar-timer{
   font-family:var(--serif);font-size:22px;font-weight:700;
   color:var(--gold-l);font-variant-numeric:tabular-nums;
@@ -89,6 +88,7 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .topbar-timer.idle{opacity:.4;color:var(--muted)}
 .topbar-timer.warn{color:#ffb347;box-shadow:0 0 18px rgba(255,179,71,.35)}
 .topbar-timer.danger{color:var(--red);text-shadow:0 0 22px rgba(240,86,74,.9);animation:tick .9s infinite}
+@keyframes tick{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
 
 .scoreboard{display:flex;align-items:center;gap:14px;padding:5px 16px;border-radius:12px;border:1px solid rgba(217,180,91,.16);background:rgba(0,0,0,.35)}
 .score-val{font-family:var(--serif);font-size:26px;font-weight:700;line-height:1}
@@ -146,7 +146,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .verdict-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .verdict-grid .btn{padding:13px 8px;font-size:12.5px}
 
-/* НОВОЕ: заметки знатока в сайдбаре */
 #myNotes{
   width:100%;min-height:200px;
   background:rgba(0,0,0,.4);
@@ -167,7 +166,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .timer{font-family:var(--serif);font-size:32px;font-weight:700;color:var(--gold-l);font-variant-numeric:tabular-nums}
 .timer.idle{opacity:.45}
 .timer.danger{color:var(--red);text-shadow:0 0 30px rgba(240,86,74,.9);animation:tick .9s infinite}
-@keyframes tick{0%,100%{transform:scale(1)}50%{transform:scale(1.09)}}
 .qmodal-body{padding:22px;display:flex;flex-direction:column;gap:16px;align-items:center}
 .q-text{font-family:var(--serif);font-size:clamp(18px,2.4vw,26px);line-height:1.5;text-align:center;color:#f6f2e6;max-width:720px}
 .q-media{width:100%;display:flex;justify-content:center}
@@ -278,7 +276,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 <div class="screen" id="scr-game">
   <div class="topbar">
     <div class="brand-mini"><div class="brand-mark">?</div></div>
-    <!-- НОВОЕ: таймер в топбаре, виден всем -->
     <div class="topbar-timer idle" id="topbarTimer">--:--</div>
     <div class="scoreboard">
       <div class="score score-experts"><span class="score-val" id="scoreExperts">0</span><span class="score-label">Знатоки</span></div>
@@ -380,10 +377,19 @@ function esc(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 let toastT;
 function toast(msg, err){ const t=$('#toast'); t.textContent=msg; t.classList.toggle('err',!!err); t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2800); }
 function ytId(url){ const m=String(url).match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([A-Za-z0-9_-]{11})/); return m?m[1]:null; }
+
 function mediaHTML(url){
   if(!url) return '';
+  // Файл, загруженный с компьютера (data URL в base64)
+  if(url.startsWith('data:')){
+    if(url.startsWith('data:image/')) return `<img src="${url}">`;
+    if(url.startsWith('data:video/')) return `<video src="${url}" controls autoplay></video>`;
+    return '';
+  }
+  // YouTube
   const id = ytId(url);
   if(id) return `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1" allowfullscreen allow="autoplay"></iframe>`;
+  // Обычные URL
   if(/\.(png|jpe?g|gif|webp|svg|bmp)(\?|$)/i.test(url)) return `<img src="${url}">`;
   if(/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url)) return `<video src="${url}" controls autoplay></video>`;
   return '';
@@ -406,7 +412,6 @@ let ALL_ANSWERS = [];
 let soundOn = true;
 let currentRotation = 0;
 
-// НОВОЕ: отслеживание переходов фаз таймера для звука
 let _prevPhase = null;
 let _prevLeft = null;
 
@@ -518,11 +523,8 @@ function renderWait(){
 /* ---------- GAME ---------- */
 function renderFromState(){
   if(!S) return;
-
-  // НОВОЕ: таймер в топбаре + звуки
   updateTopbarTimer();
   detectTimerSounds();
-
   if(S.phase === 'lobby'){ go('wait'); renderWait(); return; }
   if(S.phase === 'game'){
     go('game');
@@ -531,7 +533,6 @@ function renderFromState(){
   }
 }
 
-// НОВОЕ: таймер в топбаре
 function updateTopbarTimer(){
   const el = $('#topbarTimer');
   if(!el) return;
@@ -552,13 +553,10 @@ function updateTopbarTimer(){
   }
 }
 
-// НОВОЕ: звуки таймера
 function detectTimerSounds(){
-  // Время вышло (running → ended)
   if(_prevPhase === 'running' && S.timer.phase === 'ended'){
     playTimeUp();
   }
-  // Пикаем в последние 5 секунд
   if(S.timer.phase === 'running' && S.timer.left !== _prevLeft
      && S.timer.left <= 5 && S.timer.left > 0){
     playWarningTick();
@@ -682,7 +680,6 @@ function getCurrentRotation(){ return currentRotation; }
 function renderSidebar(){
   const sb = $('#sidebar');
 
-  // НОВОЕ: у знатоков — заметки
   if(!IS_HOST){
     sb.innerHTML = `
       <div class="block" style="text-align:center">
@@ -923,7 +920,6 @@ function beep(freq, vol, dur){
   }catch(_){}
 }
 
-// НОВОЕ: сигнал при окончании времени — три нисходящих тона
 function playTimeUp(){
   if(!soundOn) return;
   [660, 660, 880, 660].forEach((f, i) => {
@@ -931,7 +927,6 @@ function playTimeUp(){
   });
 }
 
-// НОВОЕ: короткая пикалка в последние 5 секунд
 function playWarningTick(){
   if(!soundOn) return;
   beep(920, 0.08, 0.06);
@@ -1005,12 +1000,46 @@ function renderPk(){
         </div>
         <textarea placeholder="Вопрос" style="width:100%;min-height:50px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-family:inherit;font-size:12.5px;resize:vertical;margin-bottom:6px">${esc(q.q)}</textarea>
         <input placeholder="Ответ" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-bottom:6px" value="${esc(q.a)}">
-        <input placeholder="Медиа URL" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px" value="${esc(q.media||'')}">
+        <input class="q-media-inp" placeholder="Медиа: вставьте URL или нажмите 📎 Файл" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-bottom:6px" value="${q.media && q.media.startsWith('data:') ? '[Загруженный файл]' : esc(q.media||'')}">
+        <div class="q-preview" style="margin-bottom:6px"></div>
+        <button class="btn q-upload" style="width:100%;border-style:dashed;font-size:11.5px">📎 Загрузить файл (картинка / видео)</button>
       `;
       qEl.querySelector('textarea').oninput = e => q.q = e.target.value;
       qEl.querySelectorAll('input')[0].oninput = e => q.a = e.target.value;
-      qEl.querySelectorAll('input')[1].oninput = e => q.media = e.target.value;
-      qEl.querySelector('button').onclick = () => {
+      const mInp = qEl.querySelector('.q-media-inp');
+      const prev = qEl.querySelector('.q-preview');
+      const renderPrev = () => {
+        if(!q.media){ prev.innerHTML = ''; return; }
+        prev.innerHTML = `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-top:4px">${mediaHTML(q.media)}</div>`;
+      };
+      renderPrev();
+
+      mInp.oninput = e => {
+        q.media = e.target.value;
+        renderPrev();
+      };
+
+      qEl.querySelector('.q-upload').onclick = () => {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'image/*,video/*';
+        inp.onchange = () => {
+          const f = inp.files[0]; if(!f) return;
+          if(f.size > 5 * 1024 * 1024){
+            if(!confirm('Файл больше 5 МБ — это может замедлить передачу пакета.\nПродолжить?')) return;
+          }
+          const rd = new FileReader();
+          rd.onload = ev => {
+            q.media = ev.target.result;
+            mInp.value = '[Загруженный файл: ' + f.name + ']';
+            renderPrev();
+          };
+          rd.readAsDataURL(f);
+        };
+        inp.click();
+      };
+
+      qEl.querySelector('button.btn.red').onclick = () => {
         if(tour.questions.length <= 1) return toast('Нельзя удалить последний вопрос');
         if(!confirm('Удалить вопрос?')) return;
         tour.questions.splice(qi, 1); renderPk();
@@ -1067,7 +1096,6 @@ buildTableSVG();
 fitStage();
 window.addEventListener('load', () => setTimeout(fitStage, 100));
 
-// При первом клике где угодно — разблокируем аудио (браузеры требуют жест пользователя)
 document.addEventListener('click', function unlockAudioOnce(){
   try { ac(); } catch(_){}
   document.removeEventListener('click', unlockAudioOnce);
