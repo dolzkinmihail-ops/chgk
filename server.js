@@ -28,7 +28,7 @@ const server = http.createServer((req, res) => {
 });
 
 // ----- WebSocket -----
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, maxPayload: 50 * 1024 * 1024 });
 const rooms = new Map();
 
 const uid = () => crypto.randomBytes(8).toString('hex');
@@ -43,13 +43,20 @@ function makeSectors(pkg, tourIndex) {
   const tour = pkg && pkg.tours && pkg.tours[tourIndex];
   const out = [];
   for (let i = 0; i < 12; i++) {
-    const src = (tour && tour.questions && tour.questions[i]) || { q: '', a: '', media: '' };
-    out.push({ q: src.q || '', a: src.a || '', media: src.media || '', status: 'idle' });
+    const src = (tour && tour.questions && tour.questions[i]) || {};
+    out.push({
+      q: src.q || '',
+      qMedia: src.qMedia || src.media || '',
+      a: src.a || '',
+      aMedia: src.aMedia || '',
+      status: 'idle'
+    });
   }
   return out;
 }
 
 function publicState(room) {
+  const active = room.active !== null ? room.sectors[room.active] : null;
   return {
     code: room.code,
     phase: room.phase,
@@ -60,6 +67,10 @@ function publicState(room) {
     revealed: room.revealed,
     timer: { left: room.timer.left, phase: room.timer.phase },
     sectors: room.sectors.map(s => ({ status: s.status })),
+    // Медиа вопроса видно ВСЕМ (знатокам тоже)
+    activeQMedia: active ? active.qMedia : '',
+    // Правильный ответ (текст + медиа) — всем только после reveal
+    revealedAnswer: (room.revealed && active) ? { a: active.a, aMedia: active.aMedia } : null,
     players: Array.from(room.players.values()).map(p => ({
       id: p.id, name: p.name, avatar: p.avatar, isHost: p.isHost,
       hasAnswer: !!(p.answer && p.answer.trim())
@@ -81,7 +92,10 @@ function broadcast(room) {
       send(p.ws, { type: 'answers', answers });
       if (room.active !== null) {
         const s = room.sectors[room.active];
-        send(p.ws, { type: 'host_question', sector: { q: s.q, a: s.a, media: s.media } });
+        send(p.ws, {
+          type: 'host_question',
+          sector: { q: s.q, qMedia: s.qMedia, a: s.a, aMedia: s.aMedia }
+        });
       } else {
         send(p.ws, { type: 'host_question', sector: null });
       }
@@ -330,9 +344,6 @@ function onResetTimer(ws) {
 function onResetRound(ws) {
   const room = getRoom(ws);
   if (!isHost(ws, room)) return;
-  if (room.active !== null && room.sectors[room.active] && room.sectors[room.active].status === 'idle') {
-    // Ок, просто сбрасываем
-  }
   room.active = null;
   room.revealed = false;
   stopRoomTimer(room);
@@ -360,7 +371,7 @@ function onNewGame(ws) {
 function onSubmitAnswer(ws, msg) {
   const room = getRoom(ws); if (!room) return;
   const p = room.players.get(ws._id); if (!p) return;
-  p.answer = String(msg.text || '').slice(0, 2000);
+  p.answer = String(msg.text || '').slice(0, 5000);
   broadcast(room);
 }
 
