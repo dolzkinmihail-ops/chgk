@@ -76,6 +76,20 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .topbar{height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(217,180,91,.12);background:linear-gradient(180deg,rgba(10,15,22,.95),rgba(10,15,22,.5));backdrop-filter:blur(14px);gap:12px;z-index:20}
 .brand-mini{display:flex;align-items:center;gap:10px}
 .brand-mark{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--gold);color:var(--gold-l);font-family:var(--serif);font-size:19px;font-weight:700}
+
+/* НОВОЕ: таймер в топбаре — виден всем */
+.topbar-timer{
+  font-family:var(--serif);font-size:22px;font-weight:700;
+  color:var(--gold-l);font-variant-numeric:tabular-nums;
+  padding:6px 16px;border-radius:12px;
+  border:1px solid rgba(217,180,91,.2);background:rgba(0,0,0,.4);
+  min-width:100px;text-align:center;transition:.3s;
+  box-shadow:0 0 0 rgba(217,180,91,0)
+}
+.topbar-timer.idle{opacity:.4;color:var(--muted)}
+.topbar-timer.warn{color:#ffb347;box-shadow:0 0 18px rgba(255,179,71,.35)}
+.topbar-timer.danger{color:var(--red);text-shadow:0 0 22px rgba(240,86,74,.9);animation:tick .9s infinite}
+
 .scoreboard{display:flex;align-items:center;gap:14px;padding:5px 16px;border-radius:12px;border:1px solid rgba(217,180,91,.16);background:rgba(0,0,0,.35)}
 .score-val{font-family:var(--serif);font-size:26px;font-weight:700;line-height:1}
 .score-experts .score-val{color:var(--green);text-shadow:0 0 22px rgba(62,207,142,.55)}
@@ -132,6 +146,18 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .verdict-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .verdict-grid .btn{padding:13px 8px;font-size:12.5px}
 
+/* НОВОЕ: заметки знатока в сайдбаре */
+#myNotes{
+  width:100%;min-height:200px;
+  background:rgba(0,0,0,.4);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:10px;padding:12px;
+  color:var(--txt);font-size:13px;line-height:1.55;
+  resize:vertical;font-family:inherit;transition:.18s
+}
+#myNotes:focus{border-color:rgba(217,180,91,.6);background:rgba(217,180,91,.06)}
+.notes-hint{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+
 /* Modal */
 .qmodal{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(3,5,8,.85);backdrop-filter:blur(7px)}
 .qmodal.show{display:flex}
@@ -166,7 +192,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .divider{width:100%;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;font-weight:600;margin:4px 0}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(217,180,91,.3),transparent)}
 
-/* Toast */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(90px);padding:13px 24px;border-radius:12px;font-size:13px;font-weight:600;z-index:300;border:1px solid rgba(217,180,91,.4);background:rgba(12,18,26,.97);color:var(--gold-l);transition:.4s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0)}
 .toast.err{border-color:rgba(240,86,74,.55);color:#ffd0cb}
@@ -177,9 +202,11 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
   .stage-wrap{height:56vh}
 }
 @media(max-width:560px){
-  .topbar{padding:0 10px;height:56px}
+  .topbar{padding:0 10px;height:56px;gap:8px}
   .score-label{display:none}
   .card{padding:20px}
+  .topbar-timer{font-size:18px;min-width:80px;padding:5px 12px}
+  .brand-mark{width:32px;height:32px;font-size:17px}
 }
 </style>
 </head>
@@ -251,6 +278,8 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 <div class="screen" id="scr-game">
   <div class="topbar">
     <div class="brand-mini"><div class="brand-mark">?</div></div>
+    <!-- НОВОЕ: таймер в топбаре, виден всем -->
+    <div class="topbar-timer idle" id="topbarTimer">--:--</div>
     <div class="scoreboard">
       <div class="score score-experts"><span class="score-val" id="scoreExperts">0</span><span class="score-label">Знатоки</span></div>
       <div class="score-sep">:</div>
@@ -311,13 +340,11 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
         </div>
       </div>
     </div>
-    <div class="sidebar" id="sidebar">
-      <!-- Динамический контент: панель хост-контроля или пустая заглушка для игроков -->
-    </div>
+    <div class="sidebar" id="sidebar"></div>
   </div>
 </div>
 
-<!-- PACK EDITOR (упрощённый, локальный) -->
+<!-- PACK EDITOR -->
 <div class="screen" id="scr-pack">
   <div class="card" style="width:min(900px,100%)">
     <h1 style="font-size:26px">Создать пакет</h1>
@@ -343,7 +370,6 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const NS = 'http://www.w3.org/2000/svg';
 const CX = 600, CY = 600, R_OUT = 380, R_IN = 185, R_NUM = 285, N_SEC = 12, SEG = 360/N_SEC, SEAT_R = 492;
 
-// ---------- Утилиты ----------
 function polar(cx,cy,r,deg){ const a=(deg-90)*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)]; }
 function annular(cx,cy,r1,r2,a1,a2){
   const [x1,y1]=polar(cx,cy,r2,a1),[x2,y2]=polar(cx,cy,r2,a2),[x3,y3]=polar(cx,cy,r1,a2),[x4,y4]=polar(cx,cy,r1,a1);
@@ -363,7 +389,6 @@ function mediaHTML(url){
   return '';
 }
 
-// ---------- Экран-менеджер ----------
 function go(id){
   $$('.screen').forEach(s => s.classList.remove('active'));
   const el = $('#scr-' + id);
@@ -371,23 +396,26 @@ function go(id){
   if(id === 'game') setTimeout(fitStage, 60);
 }
 
-// ---------- WebSocket ----------
+/* ---------- WebSocket ---------- */
 let WS = null;
-let ME = null;      // мой id
+let ME = null;
 let IS_HOST = false;
-let S = null;       // state
-let HOST_Q = null;  // {q, a, media} — приходит только хосту
+let S = null;
+let HOST_Q = null;
 let ALL_ANSWERS = [];
-let SPIN_ANIM = null; // {sectorIndex, duration, startedAt}
 let soundOn = true;
+let currentRotation = 0;
+
+// НОВОЕ: отслеживание переходов фаз таймера для звука
+let _prevPhase = null;
+let _prevLeft = null;
 
 function connect(onOpen){
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = proto + '//' + location.host;
-  WS = new WebSocket(url);
+  WS = new WebSocket(proto + '//' + location.host);
   WS.onopen = () => { onOpen && onOpen(); };
   WS.onclose = () => { toast('Соединение с сервером потеряно', true); };
-  WS.onerror = () => { toast('Ошибка соединения. Сервер не запущен?', true); };
+  WS.onerror = () => { toast('Ошибка соединения', true); };
   WS.onmessage = e => {
     let msg; try { msg = JSON.parse(e.data); } catch(_) { return; }
     handleServer(msg);
@@ -405,17 +433,13 @@ function handleServer(msg){
     $('#waitCode').textContent = msg.code;
     go('wait');
   } else if(msg.type === 'state'){
-    S = msg.state;
-    ME = msg.you;
-    IS_HOST = msg.isHost;
+    S = msg.state; ME = msg.you; IS_HOST = msg.isHost;
     renderFromState();
   } else if(msg.type === 'host_question'){
     HOST_Q = msg.sector;
-    renderModal();
-    renderSidebar();
+    renderModal(); renderSidebar();
   } else if(msg.type === 'answers'){
-    ALL_ANSWERS = msg.answers;
-    renderModal();
+    ALL_ANSWERS = msg.answers; renderModal();
   } else if(msg.type === 'spin'){
     startSpin(msg.sectorIndex, msg.duration);
   } else if(msg.type === 'error'){
@@ -423,7 +447,7 @@ function handleServer(msg){
   }
 }
 
-// ---------- Лобби: создание / вход ----------
+/* ---------- Лобби ---------- */
 let pendingPackage = null;
 
 $('#btnCreate').onclick = () => go('create');
@@ -444,13 +468,7 @@ $('#btnDoCreate').onclick = () => {
   const roundTime = Math.max(20, Math.min(300, +$('#cfgTime').value || 60));
   const mode = $('#cfgMode').value;
   connect(() => {
-    sendMsg({
-      type: 'create',
-      name,
-      avatar: null,
-      settings: { roundTime, mode, tourIndex: 0 },
-      pkg: pendingPackage
-    });
+    sendMsg({ type: 'create', name, avatar: null, settings: { roundTime, mode, tourIndex: 0 }, pkg: pendingPackage });
   });
 };
 
@@ -458,12 +476,9 @@ $('#btnDoJoin').onclick = () => {
   const name = $('#joinName').value.trim() || 'Знаток';
   const code = $('#joinCode').value.trim().toUpperCase();
   if(!code){ toast('Введите код'); return; }
-  connect(() => {
-    sendMsg({ type: 'join', code, name, avatar: null });
-  });
+  connect(() => sendMsg({ type: 'join', code, name, avatar: null }));
 };
 
-// ---------- WAIT ----------
 $('#waitCode').onclick = () => {
   const c = $('#waitCode').textContent;
   navigator.clipboard.writeText(c).then(() => toast('Код скопирован: ' + c)).catch(() => toast(c));
@@ -473,8 +488,7 @@ function renderWait(){
   if(!S) return;
   const players = S.players || [];
   $('#waitCount').textContent = players.length;
-  const box = $('#waitPlayers');
-  box.innerHTML = '';
+  const box = $('#waitPlayers'); box.innerHTML = '';
   players.forEach(p => {
     const card = document.createElement('div');
     card.className = 'player-card' + (p.isHost ? ' host' : '');
@@ -487,8 +501,7 @@ function renderWait(){
     `;
     box.appendChild(card);
   });
-  const actions = $('#waitActions');
-  actions.innerHTML = '';
+  const actions = $('#waitActions'); actions.innerHTML = '';
   if(IS_HOST){
     const b = document.createElement('button');
     b.className = 'btn-primary';
@@ -502,19 +515,56 @@ function renderWait(){
   }
 }
 
-// ---------- GAME ----------
+/* ---------- GAME ---------- */
 function renderFromState(){
   if(!S) return;
+
+  // НОВОЕ: таймер в топбаре + звуки
+  updateTopbarTimer();
+  detectTimerSounds();
+
   if(S.phase === 'lobby'){ go('wait'); renderWait(); return; }
   if(S.phase === 'game'){
     go('game');
-    renderTable();
-    renderSeats();
-    renderScore();
-    renderSidebar();
-    renderModal();
+    renderTable(); renderSeats(); renderScore(); renderSidebar(); renderModal();
     return;
   }
+}
+
+// НОВОЕ: таймер в топбаре
+function updateTopbarTimer(){
+  const el = $('#topbarTimer');
+  if(!el) return;
+  if(S.active === null){
+    el.textContent = '--:--';
+    el.className = 'topbar-timer idle';
+    return;
+  }
+  el.textContent = fmtTime(S.timer.left);
+  el.className = 'topbar-timer';
+  if(S.timer.phase === 'idle' || S.timer.phase === 'paused'){
+    el.classList.add('idle');
+  } else if(S.timer.phase === 'ended'){
+    el.classList.add('danger');
+  } else if(S.timer.phase === 'running'){
+    if(S.timer.left <= 10) el.classList.add('danger');
+    else if(S.timer.left <= 20) el.classList.add('warn');
+  }
+}
+
+// НОВОЕ: звуки таймера
+function detectTimerSounds(){
+  // Время вышло (running → ended)
+  if(_prevPhase === 'running' && S.timer.phase === 'ended'){
+    playTimeUp();
+  }
+  // Пикаем в последние 5 секунд
+  if(S.timer.phase === 'running' && S.timer.left !== _prevLeft
+     && S.timer.left <= 5 && S.timer.left > 0){
+    playWarningTick();
+  }
+  _prevPhase = S.timer.phase;
+  _prevLeft = S.timer.left;
 }
 
 function buildTableSVG(){
@@ -523,8 +573,7 @@ function buildTableSVG(){
     const a1 = i*SEG, a2 = (i+1)*SEG;
     const p = document.createElementNS(NS, 'path');
     p.setAttribute('d', annular(CX, CY, R_IN, R_OUT, a1, a2));
-    p.setAttribute('class', 'sector');
-    p.dataset.i = i;
+    p.setAttribute('class', 'sector'); p.dataset.i = i;
     p.addEventListener('click', () => {
       if(!IS_HOST) return;
       if(S.sectors[i].status !== 'idle'){ toast('Сектор уже разыгран'); return; }
@@ -542,7 +591,6 @@ function buildTableSVG(){
 
 function renderTable(){
   if(!S) return;
-  // Обновляем классы секторов
   $$('#sectors .sector').forEach((el, i) => {
     const s = S.sectors[i]; if(!s) return;
     el.classList.remove('active','played-expert','played-host','locked');
@@ -596,10 +644,9 @@ function renderScore(){
 }
 function bumpEl(el){ el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 
-// ---------- SPIN ----------
+/* ---------- SPIN ---------- */
 let spinAnimationFrame = null;
 function startSpin(sectorIndex, duration){
-  const t = S;
   const desired = (sectorIndex + 0.5) * SEG;
   const currentRot = getCurrentRotation();
   let delta = desired - (currentRot % 360);
@@ -611,7 +658,6 @@ function startSpin(sectorIndex, duration){
   const tg = $('#topGroup');
   tg.classList.add('spinning');
   playSpinSound(dur / 1000);
-  const idx = () => 'x';
   function frame(now){
     const p = Math.min(1, (now - t0) / dur);
     const e = 1 - Math.pow(1 - p, 4);
@@ -619,6 +665,7 @@ function startSpin(sectorIndex, duration){
     tg.setAttribute('transform', `rotate(${ang} 600 600)`);
     if(p < 1) spinAnimationFrame = requestAnimationFrame(frame);
     else {
+      currentRotation = total;
       tg.classList.remove('spinning');
       playDing();
       if(S && S.active !== null){
@@ -629,21 +676,33 @@ function startSpin(sectorIndex, duration){
   }
   spinAnimationFrame = requestAnimationFrame(frame);
 }
-let currentRotation = 0;
 function getCurrentRotation(){ return currentRotation; }
 
-// ---------- SIDEBAR ----------
+/* ---------- SIDEBAR ---------- */
 function renderSidebar(){
   const sb = $('#sidebar');
+
+  // НОВОЕ: у знатоков — заметки
   if(!IS_HOST){
     sb.innerHTML = `
       <div class="block" style="text-align:center">
-        <div class="block-title">🎩 Ведущий управляет игрой</div>
-        <div style="color:var(--muted);font-size:13px;line-height:1.6">Крутите волчок вместе с ним и пишите свой ответ прямо в окне вопроса. Ваш ответ увидит только ведущий.</div>
+        <div class="block-title">🎩 Игра идёт</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.6">
+          Крутите волчок вместе с ведущим. Свой ответ пишите прямо в окне вопроса — его увидит только ведущий.
+        </div>
+      </div>
+      <div class="block">
+        <div class="block-title">📝 Мои заметки</div>
+        <textarea id="myNotes" placeholder="Версии, догадки, мысли..."></textarea>
+        <div class="notes-hint">Сохраняются на этом устройстве</div>
       </div>
     `;
+    const notesEl = document.getElementById('myNotes');
+    notesEl.value = localStorage.getItem('chgk_my_notes') || '';
+    notesEl.oninput = () => { localStorage.setItem('chgk_my_notes', notesEl.value); };
     return;
   }
+
   sb.innerHTML = `
     <div class="block">
       <div class="block-title"><span>Раунд</span><span class="status-pill idle" id="statusPill">—</span></div>
@@ -687,7 +746,6 @@ function renderSidebar(){
   $('#sbHost') && ($('#sbHost').onclick = () => sendMsg({ type: 'award', who: 'host' }));
   $('#sbExpMinus') && ($('#sbExpMinus').onclick = () => sendMsg({ type: 'minus', who: 'expert' }));
   $('#sbHostMinus') && ($('#sbHostMinus').onclick = () => sendMsg({ type: 'minus', who: 'host' }));
-  // Обновляем пилюлю статуса
   const pill = $('#statusPill');
   if(pill && S){
     if(S.active === null){ pill.className = 'status-pill idle'; pill.textContent = 'Не выбран'; }
@@ -698,25 +756,21 @@ function renderSidebar(){
   }
 }
 
-// ---------- MODAL ----------
+/* ---------- MODAL ---------- */
 $('#modalClose').onclick = () => { $('#qmodal').classList.remove('show'); };
 
 function renderModal(){
   if(!S) return;
   if(S.active === null){ $('#qmodal').classList.remove('show'); return; }
-  // При начале спина ещё рано показывать
-  if(!$('#qmodal').classList.contains('show') && S.timer.phase === 'idle' && S.active === null) return;
 
   $('#modalSector').textContent = 'Сектор ' + (S.active + 1);
 
-  // Таймер
   const t = $('#modalTimer');
   t.textContent = fmtTime(S.timer.left);
   t.classList.remove('idle', 'danger');
   if(S.timer.phase === 'idle' || S.timer.phase === 'paused') t.classList.add('idle');
   if(S.timer.left <= 10 && S.timer.phase === 'running') t.classList.add('danger');
 
-  // Вопрос — только хосту
   const qBox = $('#modalQ');
   const mBox = $('#modalMedia');
   if(IS_HOST && HOST_Q){
@@ -729,7 +783,6 @@ function renderModal(){
     mBox.innerHTML = ''; mBox.style.display = 'none';
   }
 
-  // Поле ответа
   const ta = $('#modalAnswer');
   const aw = $('#answerWriteBox');
   if(ta.dataset.sec !== String(S.active)){
@@ -738,15 +791,10 @@ function renderModal(){
   }
   ta.disabled = (S.timer.phase === 'ended' || S.timer.phase === 'idle');
   aw.classList.remove('sent');
-  if(S.timer.phase === 'idle'){
-    ta.placeholder = 'Обсуждение ещё не началось...';
-  } else if(S.timer.phase === 'running'){
-    ta.placeholder = 'Пишите ответ во время обсуждения...';
-  } else if(S.timer.phase === 'ended'){
-    ta.placeholder = 'Время истекло';
-  }
+  if(S.timer.phase === 'idle') ta.placeholder = 'Обсуждение ещё не началось...';
+  else if(S.timer.phase === 'running') ta.placeholder = 'Пишите ответ во время обсуждения...';
+  else if(S.timer.phase === 'ended') ta.placeholder = 'Время истекло';
 
-  // Список ответов — только хосту при ended
   const aBox = $('#answersBox');
   const rBox = $('#modalReveal');
   aBox.innerHTML = ''; rBox.innerHTML = '';
@@ -766,7 +814,6 @@ function renderModal(){
     }
   }
 
-  // Статус и кнопки
   const st = $('#modalStatus'); st.innerHTML = '';
   if(S.timer.phase === 'idle'){
     if(IS_HOST){
@@ -796,8 +843,7 @@ function renderModal(){
     st.appendChild(lbl);
     if(IS_HOST){
       const div = document.createElement('div');
-      div.className = 'divider';
-      div.textContent = 'Решение ведущего';
+      div.className = 'divider'; div.textContent = 'Решение ведущего';
       st.appendChild(div);
       const plus = document.createElement('div');
       plus.className = 'verdict-grid';
@@ -838,7 +884,7 @@ function fmtTime(s){
   return String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
 }
 
-// ---------- ОТПРАВКА ОТВЕТА ----------
+/* ---------- ОТПРАВКА ОТВЕТА ---------- */
 let answerTimer = null;
 $('#modalAnswer').addEventListener('input', e => {
   if(!S || S.active === null) return;
@@ -850,7 +896,7 @@ $('#modalAnswer').addEventListener('input', e => {
   }, 350);
 });
 
-// ---------- SCALE ----------
+/* ---------- SCALE ---------- */
 function fitStage(){
   const wrap = $('#stageWrap'), stage = $('#stage');
   if(!wrap || !stage) return;
@@ -859,9 +905,38 @@ function fitStage(){
 }
 window.addEventListener('resize', fitStage);
 
-// ---------- ЗВУК ----------
+/* ---------- ЗВУК ---------- */
 let AC = null;
 function ac(){ if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if(AC.state === 'suspended') AC.resume(); return AC; }
+
+function beep(freq, vol, dur){
+  if(!soundOn) return;
+  try{
+    const c = ac(), now = c.currentTime;
+    const o = c.createOscillator(); o.type='square'; o.frequency.value=freq;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(vol || 0.1, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + (dur || 0.1));
+    o.connect(g); g.connect(c.destination);
+    o.start(now); o.stop(now + (dur || 0.1) + 0.02);
+  }catch(_){}
+}
+
+// НОВОЕ: сигнал при окончании времени — три нисходящих тона
+function playTimeUp(){
+  if(!soundOn) return;
+  [660, 660, 880, 660].forEach((f, i) => {
+    setTimeout(() => beep(f, 0.16, 0.28), i * 260);
+  });
+}
+
+// НОВОЕ: короткая пикалка в последние 5 секунд
+function playWarningTick(){
+  if(!soundOn) return;
+  beep(920, 0.08, 0.06);
+}
+
 function playSpinSound(dur){
   if(!soundOn) return;
   try{
@@ -882,6 +957,7 @@ function playSpinSound(dur){
     src.start(now); src.stop(now + dur);
   }catch(_){}
 }
+
 function playDing(){
   if(!soundOn) return;
   try{
@@ -898,7 +974,7 @@ function playDing(){
   }catch(_){}
 }
 
-// ---------- PACK EDITOR (локальный) ----------
+/* ---------- PACK EDITOR ---------- */
 let pkData = { name:'Новый пакет', tours:[{name:'Тур 1', questions:Array.from({length:12},()=>({q:'',a:'',media:''}))}] };
 function renderPk(){
   $('#pkName').value = pkData.name;
@@ -931,7 +1007,6 @@ function renderPk(){
         <input placeholder="Ответ" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-bottom:6px" value="${esc(q.a)}">
         <input placeholder="Медиа URL" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px" value="${esc(q.media||'')}">
       `;
-      const [ta,ia,im] = qEl.querySelectorAll('textarea, input');
       qEl.querySelector('textarea').oninput = e => q.q = e.target.value;
       qEl.querySelectorAll('input')[0].oninput = e => q.a = e.target.value;
       qEl.querySelectorAll('input')[1].oninput = e => q.media = e.target.value;
@@ -972,7 +1047,6 @@ $('#pkImportFile').onchange = e => {
   rd.readAsText(f);
 };
 
-// Добавим кнопку "Создать пакет" на главный экран через инициализацию
 (function addPackButton(){
   const homeBtns = document.querySelector('.home-btns');
   if(!homeBtns) return;
@@ -983,15 +1057,21 @@ $('#pkImportFile').onchange = e => {
   homeBtns.appendChild(b);
 })();
 
-// ---------- SOUND/FULL/LEAVE ----------
+/* ---------- SOUND/FULL/LEAVE ---------- */
 $('#btnSound').onclick = () => { soundOn = !soundOn; $('#btnSound').textContent = soundOn ? '🔊' : '🔇'; };
 $('#btnFull').onclick = () => { if(!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); };
 $('#btnLeave').onclick = () => { if(confirm('Выйти в главное меню? Соединение закроется.')){ try{ WS && WS.close(); }catch(_){} location.reload(); } };
 
-// ---------- INIT ----------
+/* ---------- INIT ---------- */
 buildTableSVG();
 fitStage();
 window.addEventListener('load', () => setTimeout(fitStage, 100));
+
+// При первом клике где угодно — разблокируем аудио (браузеры требуют жест пользователя)
+document.addEventListener('click', function unlockAudioOnce(){
+  try { ac(); } catch(_){}
+  document.removeEventListener('click', unlockAudioOnce);
+}, { once: true });
 </script>
 </body>
 </html>
