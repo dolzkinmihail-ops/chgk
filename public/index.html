@@ -70,7 +70,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .player-card .tag{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:2px}
 .player-card.host{border-color:rgba(217,180,91,.5);background:rgba(217,180,91,.08)}
 
-/* GAME */
 #scr-game{padding:0;align-items:stretch;overflow:hidden;display:none}
 #scr-game.active{display:flex}
 .topbar{height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(217,180,91,.12);background:linear-gradient(180deg,rgba(10,15,22,.95),rgba(10,15,22,.5));backdrop-filter:blur(14px);gap:12px;z-index:20}
@@ -83,7 +82,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
   padding:6px 16px;border-radius:12px;
   border:1px solid rgba(217,180,91,.2);background:rgba(0,0,0,.4);
   min-width:100px;text-align:center;transition:.3s;
-  box-shadow:0 0 0 rgba(217,180,91,0)
 }
 .topbar-timer.idle{opacity:.4;color:var(--muted)}
 .topbar-timer.warn{color:#ffb347;box-shadow:0 0 18px rgba(255,179,71,.35)}
@@ -157,7 +155,6 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 #myNotes:focus{border-color:rgba(217,180,91,.6);background:rgba(217,180,91,.06)}
 .notes-hint{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
 
-/* Modal */
 .qmodal{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(3,5,8,.85);backdrop-filter:blur(7px)}
 .qmodal.show{display:flex}
 .qmodal-card{position:relative;width:min(820px,100%);max-height:100%;overflow-y:auto;border-radius:22px;border:1px solid rgba(217,180,91,.32);background:linear-gradient(170deg,rgba(20,28,40,.98),rgba(8,12,18,.99));box-shadow:0 40px 100px -30px rgba(0,0,0,1)}
@@ -184,6 +181,8 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
 .answer-reveal{padding:16px 20px;border-radius:14px;text-align:center;border:1px solid rgba(62,207,142,.4);background:rgba(62,207,142,.09);width:100%;max-width:720px}
 .answer-reveal .lbl{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--green);margin-bottom:6px}
 .answer-reveal .val{font-family:var(--serif);font-size:20px;color:#d9fff0;line-height:1.4}
+.answer-reveal .reveal-media{margin-top:12px;display:flex;justify-content:center}
+.answer-reveal .reveal-media img,.answer-reveal .reveal-media video{max-width:100%;max-height:40vh;border-radius:12px;border:1px solid rgba(62,207,142,.3)}
 .modal-status{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
 .time-up{font-family:var(--serif);font-size:26px;color:var(--gold-l);text-align:center}
 .waiting{color:var(--muted);font-size:14px;text-align:center;padding:10px 0}
@@ -324,13 +323,18 @@ button,input,textarea,select{font-family:inherit;color:inherit;outline:none}
             </div>
           </div>
           <div class="qmodal-body">
+            <!-- Текст вопроса — только ведущему -->
             <div class="q-text" id="modalQ" style="display:none">—</div>
-            <div class="q-media" id="modalMedia"></div>
+            <!-- Медиа вопроса — видно ВСЕМ -->
+            <div class="q-media" id="modalQMedia"></div>
+            <!-- Поле для ответа знатоков -->
             <div class="answer-write" id="answerWriteBox">
               <label>✍ Ваш ответ за столом</label>
               <textarea id="modalAnswer" placeholder="Пишите ответ здесь..."></textarea>
             </div>
+            <!-- Ответы знатоков — только ведущему при ended -->
             <div id="answersBox"></div>
+            <!-- Правильный ответ — после reveal, ВСЕМ -->
             <div id="modalReveal"></div>
             <div class="modal-status" id="modalStatus"></div>
           </div>
@@ -380,16 +384,13 @@ function ytId(url){ const m=String(url).match(/(?:youtu\.be\/|v=|embed\/|shorts\
 
 function mediaHTML(url){
   if(!url) return '';
-  // Файл, загруженный с компьютера (data URL в base64)
   if(url.startsWith('data:')){
     if(url.startsWith('data:image/')) return `<img src="${url}">`;
     if(url.startsWith('data:video/')) return `<video src="${url}" controls autoplay></video>`;
     return '';
   }
-  // YouTube
   const id = ytId(url);
   if(id) return `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1" allowfullscreen allow="autoplay"></iframe>`;
-  // Обычные URL
   if(/\.(png|jpe?g|gif|webp|svg|bmp)(\?|$)/i.test(url)) return `<img src="${url}">`;
   if(/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url)) return `<video src="${url}" controls autoplay></video>`;
   return '';
@@ -411,7 +412,6 @@ let HOST_Q = null;
 let ALL_ANSWERS = [];
 let soundOn = true;
 let currentRotation = 0;
-
 let _prevPhase = null;
 let _prevLeft = null;
 
@@ -543,24 +543,17 @@ function updateTopbarTimer(){
   }
   el.textContent = fmtTime(S.timer.left);
   el.className = 'topbar-timer';
-  if(S.timer.phase === 'idle' || S.timer.phase === 'paused'){
-    el.classList.add('idle');
-  } else if(S.timer.phase === 'ended'){
-    el.classList.add('danger');
-  } else if(S.timer.phase === 'running'){
+  if(S.timer.phase === 'idle' || S.timer.phase === 'paused') el.classList.add('idle');
+  else if(S.timer.phase === 'ended') el.classList.add('danger');
+  else if(S.timer.phase === 'running'){
     if(S.timer.left <= 10) el.classList.add('danger');
     else if(S.timer.left <= 20) el.classList.add('warn');
   }
 }
 
 function detectTimerSounds(){
-  if(_prevPhase === 'running' && S.timer.phase === 'ended'){
-    playTimeUp();
-  }
-  if(S.timer.phase === 'running' && S.timer.left !== _prevLeft
-     && S.timer.left <= 5 && S.timer.left > 0){
-    playWarningTick();
-  }
+  if(_prevPhase === 'running' && S.timer.phase === 'ended') playTimeUp();
+  if(S.timer.phase === 'running' && S.timer.left !== _prevLeft && S.timer.left <= 5 && S.timer.left > 0) playWarningTick();
   _prevPhase = S.timer.phase;
   _prevLeft = S.timer.left;
 }
@@ -643,10 +636,9 @@ function renderScore(){
 function bumpEl(el){ el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 
 /* ---------- SPIN ---------- */
-let spinAnimationFrame = null;
 function startSpin(sectorIndex, duration){
   const desired = (sectorIndex + 0.5) * SEG;
-  const currentRot = getCurrentRotation();
+  const currentRot = currentRotation;
   let delta = desired - (currentRot % 360);
   if(delta < 0) delta += 360;
   const total = currentRot + 360 * 5 + delta;
@@ -661,7 +653,7 @@ function startSpin(sectorIndex, duration){
     const e = 1 - Math.pow(1 - p, 4);
     const ang = startRot + (total - startRot) * e;
     tg.setAttribute('transform', `rotate(${ang} 600 600)`);
-    if(p < 1) spinAnimationFrame = requestAnimationFrame(frame);
+    if(p < 1) requestAnimationFrame(frame);
     else {
       currentRotation = total;
       tg.classList.remove('spinning');
@@ -672,9 +664,8 @@ function startSpin(sectorIndex, duration){
       }
     }
   }
-  spinAnimationFrame = requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
-function getCurrentRotation(){ return currentRotation; }
 
 /* ---------- SIDEBAR ---------- */
 function renderSidebar(){
@@ -685,7 +676,7 @@ function renderSidebar(){
       <div class="block" style="text-align:center">
         <div class="block-title">🎩 Игра идёт</div>
         <div style="color:var(--muted);font-size:13px;line-height:1.6">
-          Крутите волчок вместе с ведущим. Свой ответ пишите прямо в окне вопроса — его увидит только ведущий.
+          Смотрите картинку вопроса, пишите свой ответ в окне вопроса — его увидит только ведущий.
         </div>
       </div>
       <div class="block">
@@ -768,18 +759,22 @@ function renderModal(){
   if(S.timer.phase === 'idle' || S.timer.phase === 'paused') t.classList.add('idle');
   if(S.timer.left <= 10 && S.timer.phase === 'running') t.classList.add('danger');
 
+  // Текст вопроса — только ведущему
   const qBox = $('#modalQ');
-  const mBox = $('#modalMedia');
-  if(IS_HOST && HOST_Q){
-    qBox.style.display = HOST_Q.q ? '' : 'none';
-    qBox.textContent = HOST_Q.q || '';
-    if(HOST_Q.media){ mBox.innerHTML = mediaHTML(HOST_Q.media); mBox.style.display = ''; }
-    else { mBox.innerHTML = ''; mBox.style.display = 'none'; }
+  if(IS_HOST && HOST_Q && HOST_Q.q){
+    qBox.style.display = '';
+    qBox.textContent = HOST_Q.q;
   } else {
     qBox.style.display = 'none';
-    mBox.innerHTML = ''; mBox.style.display = 'none';
   }
 
+  // Медиа вопроса — видно ВСЕМ
+  const qmBox = $('#modalQMedia');
+  const qMedia = (IS_HOST && HOST_Q) ? HOST_Q.qMedia : (S.activeQMedia || '');
+  if(qMedia){ qmBox.innerHTML = mediaHTML(qMedia); qmBox.style.display = ''; }
+  else { qmBox.innerHTML = ''; qmBox.style.display = 'none'; }
+
+  // Поле ответа
   const ta = $('#modalAnswer');
   const aw = $('#answerWriteBox');
   if(ta.dataset.sec !== String(S.active)){
@@ -792,9 +787,9 @@ function renderModal(){
   else if(S.timer.phase === 'running') ta.placeholder = 'Пишите ответ во время обсуждения...';
   else if(S.timer.phase === 'ended') ta.placeholder = 'Время истекло';
 
+  // Ответы знатоков — только ведущему при ended
   const aBox = $('#answersBox');
-  const rBox = $('#modalReveal');
-  aBox.innerHTML = ''; rBox.innerHTML = '';
+  aBox.innerHTML = '';
   if(IS_HOST && S.timer.phase === 'ended'){
     const list = document.createElement('div');
     list.className = 'answers-list';
@@ -806,11 +801,21 @@ function renderModal(){
       list.appendChild(el);
     });
     aBox.appendChild(list);
-    if(S.revealed && HOST_Q && HOST_Q.a){
-      rBox.innerHTML = `<div class="answer-reveal"><div class="lbl">Правильный ответ</div><div class="val">${esc(HOST_Q.a)}</div></div>`;
-    }
   }
 
+  // Правильный ответ (текст + медиа) — ВСЕМ после reveal
+  const rBox = $('#modalReveal');
+  rBox.innerHTML = '';
+  if(S.revealedAnswer){
+    const a = S.revealedAnswer;
+    let html = '<div class="answer-reveal"><div class="lbl">Правильный ответ</div>';
+    if(a.a) html += `<div class="val">${esc(a.a)}</div>`;
+    if(a.aMedia) html += `<div class="reveal-media">${mediaHTML(a.aMedia)}</div>`;
+    html += '</div>';
+    rBox.innerHTML = html;
+  }
+
+  // Кнопки и статус
   const st = $('#modalStatus'); st.innerHTML = '';
   if(S.timer.phase === 'idle'){
     if(IS_HOST){
@@ -862,10 +867,10 @@ function renderModal(){
       st.appendChild(minus);
       minus.querySelector('#mbExpM').onclick = () => sendMsg({ type: 'minus', who: 'expert' });
       minus.querySelector('#mbHostM').onclick = () => sendMsg({ type: 'minus', who: 'host' });
-      if(!S.revealed && HOST_Q && HOST_Q.a){
+      if(!S.revealed && HOST_Q){
         const rev = document.createElement('button');
         rev.className = 'btn';
-        rev.textContent = '👁 Показать правильный ответ';
+        rev.textContent = '👁 Показать правильный ответ всем';
         rev.onclick = () => sendMsg({ type: 'reveal' });
         st.appendChild(rev);
       }
@@ -905,7 +910,6 @@ window.addEventListener('resize', fitStage);
 /* ---------- ЗВУК ---------- */
 let AC = null;
 function ac(){ if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); if(AC.state === 'suspended') AC.resume(); return AC; }
-
 function beep(freq, vol, dur){
   if(!soundOn) return;
   try{
@@ -919,19 +923,8 @@ function beep(freq, vol, dur){
     o.start(now); o.stop(now + (dur || 0.1) + 0.02);
   }catch(_){}
 }
-
-function playTimeUp(){
-  if(!soundOn) return;
-  [660, 660, 880, 660].forEach((f, i) => {
-    setTimeout(() => beep(f, 0.16, 0.28), i * 260);
-  });
-}
-
-function playWarningTick(){
-  if(!soundOn) return;
-  beep(920, 0.08, 0.06);
-}
-
+function playTimeUp(){ if(!soundOn) return; [660, 660, 880, 660].forEach((f, i) => setTimeout(() => beep(f, 0.16, 0.28), i * 260)); }
+function playWarningTick(){ if(!soundOn) return; beep(920, 0.08, 0.06); }
 function playSpinSound(dur){
   if(!soundOn) return;
   try{
@@ -952,7 +945,6 @@ function playSpinSound(dur){
     src.start(now); src.stop(now + dur);
   }catch(_){}
 }
-
 function playDing(){
   if(!soundOn) return;
   try{
@@ -970,7 +962,36 @@ function playDing(){
 }
 
 /* ---------- PACK EDITOR ---------- */
-let pkData = { name:'Новый пакет', tours:[{name:'Тур 1', questions:Array.from({length:12},()=>({q:'',a:'',media:''}))}] };
+function emptyQ(){ return { q:'', qMedia:'', a:'', aMedia:'' }; }
+let pkData = { name:'Новый пакет', tours:[{name:'Тур 1', questions:Array.from({length:12}, emptyQ)}] };
+
+function filePickerButton(getCurrent, setCurrent, inputEl, previewEl, label){
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.style.cssText = 'width:100%;border-style:dashed;font-size:11.5px;margin-top:6px';
+  btn.textContent = '📎 ' + label;
+  btn.onclick = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*,video/*';
+    inp.onchange = () => {
+      const f = inp.files[0]; if(!f) return;
+      if(f.size > 5 * 1024 * 1024){
+        if(!confirm('Файл больше 5 МБ — это может замедлить передачу пакета.\nПродолжить?')) return;
+      }
+      const rd = new FileReader();
+      rd.onload = ev => {
+        setCurrent(ev.target.result);
+        inputEl.value = '[Файл: ' + f.name + ']';
+        previewEl.innerHTML = `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-top:4px">${mediaHTML(ev.target.result)}</div>`;
+      };
+      rd.readAsDataURL(f);
+    };
+    inp.click();
+  };
+  return btn;
+}
+
 function renderPk(){
   $('#pkName').value = pkData.name;
   const box = $('#pkBody'); box.innerHTML = '';
@@ -991,55 +1012,86 @@ function renderPk(){
     };
     tour.questions.forEach((q, qi) => {
       const qEl = document.createElement('div');
-      qEl.style.cssText = 'border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px;margin-bottom:8px;background:rgba(0,0,0,.15)';
+      qEl.style.cssText = 'border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px;margin-bottom:10px;background:rgba(0,0,0,.15)';
       qEl.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <div style="width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:rgba(217,180,91,.1);color:var(--gold-l);font-size:12px;font-weight:700">${qi+1}</div>
-          <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);flex:1">Вопрос ${qi+1}</div>
-          <button class="btn red" style="padding:4px 9px;font-size:10px">×</button>
+          <div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);flex:1;font-weight:700">Вопрос ${qi+1}</div>
+          <button class="btn red" style="padding:4px 9px;font-size:10px" data-act="del">×</button>
         </div>
-        <textarea placeholder="Вопрос" style="width:100%;min-height:50px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-family:inherit;font-size:12.5px;resize:vertical;margin-bottom:6px">${esc(q.q)}</textarea>
-        <input placeholder="Ответ" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-bottom:6px" value="${esc(q.a)}">
-        <input class="q-media-inp" placeholder="Медиа: вставьте URL или нажмите 📎 Файл" style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-bottom:6px" value="${q.media && q.media.startsWith('data:') ? '[Загруженный файл]' : esc(q.media||'')}">
-        <div class="q-preview" style="margin-bottom:6px"></div>
-        <button class="btn q-upload" style="width:100%;border-style:dashed;font-size:11.5px">📎 Загрузить файл (картинка / видео)</button>
       `;
-      qEl.querySelector('textarea').oninput = e => q.q = e.target.value;
-      qEl.querySelectorAll('input')[0].oninput = e => q.a = e.target.value;
-      const mInp = qEl.querySelector('.q-media-inp');
-      const prev = qEl.querySelector('.q-preview');
-      const renderPrev = () => {
-        if(!q.media){ prev.innerHTML = ''; return; }
-        prev.innerHTML = `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-top:4px">${mediaHTML(q.media)}</div>`;
-      };
-      renderPrev();
 
-      mInp.oninput = e => {
-        q.media = e.target.value;
-        renderPrev();
-      };
+      // Блок вопроса
+      const qBlock = document.createElement('div');
+      qBlock.style.cssText = 'padding:10px;border-radius:10px;background:rgba(217,180,91,.05);border:1px solid rgba(217,180,91,.15);margin-bottom:10px';
+      qBlock.innerHTML = `<div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">📖 Вопрос</div>`;
 
-      qEl.querySelector('.q-upload').onclick = () => {
-        const inp = document.createElement('input');
-        inp.type = 'file';
-        inp.accept = 'image/*,video/*';
-        inp.onchange = () => {
-          const f = inp.files[0]; if(!f) return;
-          if(f.size > 5 * 1024 * 1024){
-            if(!confirm('Файл больше 5 МБ — это может замедлить передачу пакета.\nПродолжить?')) return;
-          }
-          const rd = new FileReader();
-          rd.onload = ev => {
-            q.media = ev.target.result;
-            mInp.value = '[Загруженный файл: ' + f.name + ']';
-            renderPrev();
-          };
-          rd.readAsDataURL(f);
-        };
-        inp.click();
-      };
+      const qTa = document.createElement('textarea');
+      qTa.placeholder = 'Текст вопроса';
+      qTa.style.cssText = 'width:100%;min-height:50px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-family:inherit;font-size:12.5px;resize:vertical';
+      qTa.value = q.q || '';
+      qTa.oninput = () => { q.q = qTa.value; };
+      qBlock.appendChild(qTa);
 
-      qEl.querySelector('button.btn.red').onclick = () => {
+      const qMinp = document.createElement('input');
+      qMinp.placeholder = 'Медиа вопроса (URL или файл)';
+      qMinp.style.cssText = 'width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-top:6px';
+      qMinp.value = q.qMedia && q.qMedia.startsWith('data:') ? '[Загруженный файл]' : (q.qMedia || '');
+      qBlock.appendChild(qMinp);
+
+      const qPrev = document.createElement('div');
+      qBlock.appendChild(qPrev);
+
+      const renderQPrev = () => {
+        qPrev.innerHTML = q.qMedia
+          ? `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-top:6px">${mediaHTML(q.qMedia)}</div>`
+          : '';
+      };
+      renderQPrev();
+
+      qMinp.oninput = e => { q.qMedia = e.target.value; renderQPrev(); };
+
+      const qBtn = filePickerButton(null, v => q.qMedia = v, qMinp, qPrev, 'Загрузить файл к вопросу');
+      qBlock.appendChild(qBtn);
+
+      qEl.appendChild(qBlock);
+
+      // Блок ответа
+      const aBlock = document.createElement('div');
+      aBlock.style.cssText = 'padding:10px;border-radius:10px;background:rgba(62,207,142,.05);border:1px solid rgba(62,207,142,.15)';
+      aBlock.innerHTML = `<div style="font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:6px">✅ Правильный ответ (виден только после раскрытия)</div>`;
+
+      const aTa = document.createElement('textarea');
+      aTa.placeholder = 'Текст ответа';
+      aTa.style.cssText = 'width:100%;min-height:50px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-family:inherit;font-size:12.5px;resize:vertical';
+      aTa.value = q.a || '';
+      aTa.oninput = () => { q.a = aTa.value; };
+      aBlock.appendChild(aTa);
+
+      const aMinp = document.createElement('input');
+      aMinp.placeholder = 'Медиа ответа (URL или файл)';
+      aMinp.style.cssText = 'width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px;color:var(--txt);font-size:12.5px;margin-top:6px';
+      aMinp.value = q.aMedia && q.aMedia.startsWith('data:') ? '[Загруженный файл]' : (q.aMedia || '');
+      aBlock.appendChild(aMinp);
+
+      const aPrev = document.createElement('div');
+      aBlock.appendChild(aPrev);
+
+      const renderAPrev = () => {
+        aPrev.innerHTML = q.aMedia
+          ? `<div style="border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-top:6px">${mediaHTML(q.aMedia)}</div>`
+          : '';
+      };
+      renderAPrev();
+
+      aMinp.oninput = e => { q.aMedia = e.target.value; renderAPrev(); };
+
+      const aBtn = filePickerButton(null, v => q.aMedia = v, aMinp, aPrev, 'Загрузить файл к ответу');
+      aBlock.appendChild(aBtn);
+
+      qEl.appendChild(aBlock);
+
+      qEl.querySelector('[data-act="del"]').onclick = () => {
         if(tour.questions.length <= 1) return toast('Нельзя удалить последний вопрос');
         if(!confirm('Удалить вопрос?')) return;
         tour.questions.splice(qi, 1); renderPk();
@@ -1050,14 +1102,14 @@ function renderPk(){
     addQ.className = 'btn';
     addQ.style.cssText = 'width:100%;border-style:dashed;color:var(--gold-l)';
     addQ.textContent = '+ Вопрос';
-    addQ.onclick = () => { tour.questions.push({q:'',a:'',media:''}); renderPk(); };
+    addQ.onclick = () => { tour.questions.push(emptyQ()); renderPk(); };
     el.appendChild(addQ);
     box.appendChild(el);
   });
 }
 $('#pkName').oninput = e => pkData.name = e.target.value;
-$('#pkAddTour').onclick = () => { pkData.tours.push({name:'Тур '+(pkData.tours.length+1), questions:Array.from({length:12},()=>({q:'',a:'',media:''}))}); renderPk(); };
-$('#pkAddQ').onclick = () => { const t = pkData.tours[pkData.tours.length-1]; t.questions.push({q:'',a:'',media:''}); renderPk(); };
+$('#pkAddTour').onclick = () => { pkData.tours.push({name:'Тур '+(pkData.tours.length+1), questions:Array.from({length:12}, emptyQ)}); renderPk(); };
+$('#pkAddQ').onclick = () => { const t = pkData.tours[pkData.tours.length-1]; t.questions.push(emptyQ()); renderPk(); };
 $('#pkExport').onclick = () => {
   const blob = new Blob([JSON.stringify(pkData, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
